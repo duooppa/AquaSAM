@@ -1,11 +1,10 @@
 # AquaSAM
 This repository is the official PyTorch implementation of AquaSAM: Foreground Underwater Image Segmentation.([arxiv](https://arxiv.org/abs/2308.04218)). 
 AquaSAM is the first attempt to extend the success of segment-anything model in the domains of underwater images.
-## Installation 
-1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
-2. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
-3. `git clone https://github.com/bowang-lab/MedSAM`
-4. Enter the MedSAM folder `cd MedSAM` and run `pip install -e .`
+## Installation
+1. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
+2. `git clone https://github.com/duooppa/AquaSAM`
+3. Enter the AquaSAM folder `cd AquaSAM` and run `pip install -e .`
 
 
 ## Fine-tune SAM on customized dataset
