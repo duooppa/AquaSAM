@@ -1,5 +1,5 @@
 # AquaSAM
-the first at-tempt to extend the success of SAM on underwater images with the purpose of creating a versatile tool for underwater image segmentation
+This repository is the official PyTorch implementation of U-shape Transformer for Underwater Image Enhancement.([arxiv](https://arxiv.org/abs/2308.04218))
 ## Installation 
 1. Create a virtual environment `conda create -n medsam python=3.10 -y` and activate it `conda activate medsam`
 2. Install [Pytorch 2.0](https://pytorch.org/get-started/locally/)
