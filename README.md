@@ -23,6 +23,7 @@ Run pre-processing
 
 ```bash
 python pre_mbl.py
+```
 - split dataset: 80% for training and 20% for testing
 - image normalization
 - pre-compute image embedding
