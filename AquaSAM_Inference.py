@@ -142,8 +142,9 @@ for npz_folder in npz_folders:
                     seg_mask = finetune_model_predict(ori_img, bbox, sam_trans, sam_model_tune, device=device)
                     sam_segs.append(seg_mask)
                     sam_bboxes.append(bbox)
-                    # these 2D dice scores are for debugging purpose. 
-                    # 3D dice scores should be computed for 3D images
+                    # The following 2D Dice score is computed slice-by-slice for debugging and per-slice evaluation.
+                    # For a comprehensive 3D volumetric assessment (if processing 3D volumes),
+                    # one might aggregate these slice scores or compute a Dice score over the entire 3D volume.
                     sam_dice_scores.append(compute_dice(seg_mask>0, gt2D>0))
                 # save npz, including sam_segs, sam_bboxes, sam_dice_scores
                 dice_scores.append(sam_dice_scores)

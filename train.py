@@ -71,6 +71,7 @@ parser.add_argument('--num_epochs', type=int, default=300)
 parser.add_argument('--batch_size', type=int, default=8)
 parser.add_argument('--lr', type=float, default=1e-5)
 parser.add_argument('--weight_decay', type=float, default=0)
+parser.add_argument('--show_plot', action='store_true', help="Show plot window during training")
 args = parser.parse_args()
 
 
@@ -84,8 +85,8 @@ sam_model.train()
 # Set up the optimizer, hyperparameter tuning will improve performancƒe here
 optimizer = torch.optim.Adam(sam_model.mask_decoder.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 seg_loss = monai.losses.DiceCELoss(sigmoid=True, squared_pred=True, reduction='mean')
-# regress loss for IoU/DSC prediction; (ignored for simplicity but will definitely included in the near future)
-# regress_loss = torch.nn.MSELoss(reduction='mean')
+# regress loss for IoU/DSC prediction;
+regress_loss = torch.nn.MSELoss(reduction='mean')
 #%% train
 num_epochs = args.num_epochs
 losses = []
@@ -94,7 +95,6 @@ train_dataset = NpzDataset(args.npz_tr_path)
 train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 for epoch in range(num_epochs):
     epoch_loss = 0
-    # Just train on the first 20 examples
     for step, (image_embedding, gt2D, boxes) in enumerate(tqdm(train_dataloader)):
         # do not compute gradients for image encoder and prompt encoder
         with torch.no_grad():
@@ -120,14 +120,37 @@ for epoch in range(num_epochs):
             multimask_output=True,
           )
 
-        loss = seg_loss(low_res_masks, gt2D.to(device))
+        # Calculate segmentation loss
+        loss_seg = seg_loss(low_res_masks, gt2D.to(device))
+
+        # Calculate target IoU for regression loss
+        with torch.no_grad():
+            probs = torch.sigmoid(low_res_masks) # (B, num_masks, H, W)
+            binary_masks = (probs > 0.5).float() # (B, num_masks, H, W)
+            gt2D_float = gt2D.to(device).float() # (B, 1, H, W)
+
+            # Ensure gt2D_float is broadcastable to binary_masks shape for intersection/union calculation
+            # This typically means gt2D_float might need to be (B, 1, H, W) if binary_masks is (B, N, H, W)
+            # or expanded if necessary. Given DiceCELoss works, gt2D is likely (B, 1, H, W)
+            # and broadcasting handles it for element-wise operations with binary_masks (B, N, H, W)
+
+            intersection = torch.sum(binary_masks * gt2D_float, dim=(-2, -1)) # Sum over H, W -> (B, num_masks)
+            union = torch.sum(binary_masks, dim=(-2, -1)) + torch.sum(gt2D_float, dim=(-2, -1)) - intersection # Sum over H, W -> (B, num_masks)
+            target_iou = intersection / (union + 1e-6) # (B, num_masks)
+            # Ensure target_iou has the same shape as iou_predictions (B, num_masks)
+            # If iou_predictions is (B, N) and target_iou from above is (B,N), it's fine.
+
+        loss_regress = regress_loss(iou_predictions, target_iou)
+        
+        total_loss = loss_seg + loss_regress # Simple sum for now
+
         optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
         optimizer.step()
-        epoch_loss += loss.item()
-    epoch_loss /= step
+        epoch_loss += total_loss.item()
+    epoch_loss /= (step + 1) # ensure step is not zero if dataloader is empty, and average correctly
     losses.append(epoch_loss)
-    print(f'EPOCH: {epoch}, Loss: {epoch_loss}')
+    print(f'EPOCH: {epoch}, Total Loss: {epoch_loss:.4f}, Seg Loss: {loss_seg.item():.4f}, Regress Loss: {loss_regress.item():.4f}')
     # save the model checkpoint
     torch.save(sam_model.state_dict(), join(model_save_path, 'sam_model_latest_7.pth'))
     # save the best model
@@ -140,7 +163,8 @@ for epoch in range(num_epochs):
     plt.title('Dice + Cross Entropy Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    # plt.show() # comment this line if you are running on a server
     plt.savefig(join(model_save_path, 'train_loss_7.png'))
+    if args.show_plot:
+        plt.show()
     plt.close()
 
