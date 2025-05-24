@@ -111,12 +111,32 @@ for epoch in range(num_epochs):
                 boxes=box_torch,
                 masks=None,
             )
+        
+        # Workaround for a shape mismatch issue in segment_anything.modeling.mask_decoder.py
+        # The MaskDecoder internally repeats image_embeddings B times (B=batch_size),
+        # making it (B*B, C, H, W). If dense_embeddings are present (B, C, H, W),
+        # they need to be similarly expanded to match for element-wise operations.
+        current_batch_size = image_embedding.shape[0] # Or whatever variable holds the input image embeddings batch
+        if dense_embeddings is not None:
+            # Check if dense_embeddings already have the B*B format (e.g. if prompt encoder itself does this sometimes)
+            # This is a safeguard, assuming prompt_encoder usually returns (B,C,H,W)
+            if dense_embeddings.shape[0] == current_batch_size:
+                expanded_dense_embeddings = dense_embeddings.repeat_interleave(current_batch_size, dim=0)
+            elif dense_embeddings.shape[0] == current_batch_size * current_batch_size:
+                expanded_dense_embeddings = dense_embeddings # Already expanded
+            else:
+                # This case would be unexpected, raise an error or warning
+                print(f"WARNING: dense_embeddings shape {dense_embeddings.shape} is unexpected with batch_size {current_batch_size}. Using as is.")
+                expanded_dense_embeddings = dense_embeddings
+        else:
+            expanded_dense_embeddings = None
+
         print("image_embeddings", image_embedding.shape)
         low_res_masks, iou_predictions = sam_model.mask_decoder(
             image_embeddings=image_embedding.to(device), # (B, 256, 64, 64)
             image_pe=sam_model.prompt_encoder.get_dense_pe(), # (1, 256, 64, 64)
             sparse_prompt_embeddings=sparse_embeddings, # (B, 2, 256)
-            dense_prompt_embeddings=dense_embeddings, # (B, 256, 64, 64)
+            dense_prompt_embeddings=expanded_dense_embeddings, # (B, 256, 64, 64)
             multimask_output=True,
           )
 
